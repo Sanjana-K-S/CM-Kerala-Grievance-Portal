@@ -175,3 +175,74 @@ def get_officers(
             for officer in officers
         ]
     }
+from pydantic import BaseModel, Field
+from app.utils.security import hash_password
+from app.utils.id_generator import generate_next_id
+
+
+class OfficerCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=150)
+    email: str = Field(min_length=5, max_length=150)
+    mobile: str | None = Field(default=None, max_length=15)
+    password: str = Field(min_length=8)
+    department_id: int
+
+
+@router.post("/officers", status_code=201)
+def create_officer(
+    data: OfficerCreateRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    email = data.email.strip().lower()
+
+    existing_user = db.query(User).filter(
+        func.lower(User.email) == email
+    ).first()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="An account with this email already exists"
+        )
+
+    department = db.query(Department).filter(
+        Department.id == data.department_id
+    ).first()
+
+    if not department:
+        raise HTTPException(
+            status_code=404,
+            detail="Department not found"
+        )
+
+    officer = User(
+        id=generate_next_id(db, User),
+        name=data.name.strip(),
+        email=email,
+        mobile=data.mobile.strip() if data.mobile else None,
+        password_hash=hash_password(data.password),
+        role="officer",
+        department_id=data.department_id
+    )
+
+    try:
+        db.add(officer)
+        db.commit()
+        db.refresh(officer)
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Could not create officer account"
+        )
+
+    return {
+        "message": "Officer account created successfully",
+        "officer": {
+            "id": officer.id,
+            "name": officer.name,
+            "email": officer.email,
+            "department_id": officer.department_id
+        }
+    }

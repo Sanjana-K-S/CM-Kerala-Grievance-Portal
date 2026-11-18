@@ -10,9 +10,8 @@ import {
   Building2,
   Users,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import api from "../services/api";
-import { Link } from "react-router-dom";
 
 const statusColors = {
   Submitted: "#2563eb",
@@ -36,8 +35,18 @@ export default function AdminDashboard() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [creatingOfficer, setCreatingOfficer] = useState(false);
+
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  const [officerForm, setOfficerForm] = useState({
+    name: "",
+    email: "",
+    mobile: "",
+    password: "",
+    department_id: "",
+  });
 
   // Load dashboard information
   const fetchDashboard = async () => {
@@ -53,17 +62,13 @@ export default function AdminDashboard() {
         ]);
 
       setStats(statsRes.data);
-
-      setGrievances(
-        grievancesRes.data.grievances || []
-      );
+      setGrievances(grievancesRes.data.grievances || []);
 
       setDepartments(
         Array.isArray(departmentsRes.data)
           ? departmentsRes.data
           : []
       );
-
     } catch (err) {
       setError(
         err.response?.data?.detail ||
@@ -93,7 +98,6 @@ export default function AdminDashboard() {
       );
 
       setOfficers(response.data.officers || []);
-
     } catch (err) {
       setError(
         err.response?.data?.detail ||
@@ -106,7 +110,6 @@ export default function AdminDashboard() {
   const openAssignment = (grievance) => {
     setSelectedGrievance(grievance);
 
-    // Preselect the existing department, if assigned
     const existingDepartment = departments.find(
       (department) => department.name === grievance.department
     );
@@ -133,7 +136,6 @@ export default function AdminDashboard() {
       );
 
       setOfficers(response.data.officers || []);
-
     } catch (err) {
       setError(
         err.response?.data?.detail ||
@@ -166,7 +168,6 @@ export default function AdminDashboard() {
       setMessage("Grievance assigned successfully.");
 
       await fetchDashboard();
-
     } catch (err) {
       setError(
         err.response?.data?.detail ||
@@ -174,6 +175,45 @@ export default function AdminDashboard() {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Register a new officer
+  const createOfficer = async (e) => {
+    e.preventDefault();
+
+    setCreatingOfficer(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await api.post("/admin/officers", {
+        ...officerForm,
+        name: officerForm.name.trim(),
+        email: officerForm.email.trim().toLowerCase(),
+        mobile: officerForm.mobile.trim(),
+        department_id: Number(officerForm.department_id),
+      });
+
+      setMessage(
+        response.data.message ||
+        "Officer account created successfully."
+      );
+
+      setOfficerForm({
+        name: "",
+        email: "",
+        mobile: "",
+        password: "",
+        department_id: "",
+      });
+    } catch (err) {
+      setError(
+        err.response?.data?.detail ||
+        "Unable to create officer account."
+      );
+    } finally {
+      setCreatingOfficer(false);
     }
   };
 
@@ -218,7 +258,7 @@ export default function AdminDashboard() {
     },
     {
       title: "Reopened",
-      value: stats.Reopened?? 0,
+      value: stats.reopened ?? 0,
       icon: <AlertCircle size={25} />,
       color: "#dc2626",
     },
@@ -229,14 +269,16 @@ export default function AdminDashboard() {
       <div style={{ maxWidth: "1250px", margin: "0 auto" }}>
 
         {/* Header */}
-        <header style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "15px",
-          marginBottom: "25px",
-        }}>
+        <header
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "15px",
+            marginBottom: "25px",
+          }}
+        >
           <div>
             <h1 style={{ margin: 0 }}>Admin Dashboard</h1>
             <p style={{ color: "#64748b", marginBottom: 0 }}>
@@ -244,39 +286,41 @@ export default function AdminDashboard() {
             </p>
           </div>
 
-          <div style={{
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  flexWrap: "wrap",
-}}>
-  <Link
-    to="/admin/enquiries"
-    className="primary-btn"
-    style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "8px",
-      background: "#14532d",
-    }}
-  >
-    View Contact Enquiries
-  </Link>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              flexWrap: "wrap",
+            }}
+          >
+            <Link
+              to="/admin/enquiries"
+              className="primary-btn"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                background: "#14532d",
+              }}
+            >
+              View Contact Enquiries
+            </Link>
 
-  <button
-    className="primary-btn"
-    onClick={logout}
-    style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "8px",
-      background: "#475569",
-    }}
-  >
-    <LogOut size={17} />
-    Logout
-  </button>
-</div>
+            <button
+              className="primary-btn"
+              onClick={logout}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                background: "#475569",
+              }}
+            >
+              <LogOut size={17} />
+              Logout
+            </button>
+          </div>
         </header>
 
         {error && (
@@ -297,25 +341,31 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <>
-
             {/* Statistics */}
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))",
-              gap: "16px",
-              marginBottom: "30px",
-            }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(175px, 1fr))",
+                gap: "16px",
+                marginBottom: "30px",
+              }}
+            >
               {cards.map((card) => (
                 <div className="card" key={card.title}>
-                  <div style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}>
-                    <span style={{
-                      color: "#64748b",
-                      fontSize: "14px",
-                    }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: "#64748b",
+                        fontSize: "14px",
+                      }}
+                    >
                       {card.title}
                     </span>
 
@@ -324,10 +374,12 @@ export default function AdminDashboard() {
                     </span>
                   </div>
 
-                  <h2 style={{
-                    fontSize: "30px",
-                    margin: "12px 0 0",
-                  }}>
+                  <h2
+                    style={{
+                      fontSize: "30px",
+                      margin: "12px 0 0",
+                    }}
+                  >
                     {card.value}
                   </h2>
                 </div>
@@ -336,23 +388,28 @@ export default function AdminDashboard() {
 
             {/* Department Overview */}
             <div className="card" style={{ marginBottom: "25px" }}>
-              <h2 style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                marginTop: 0,
-              }}>
+              <h2
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  marginTop: 0,
+                }}
+              >
                 <Building2 size={22} />
                 Department Overview
               </h2>
 
               {Array.isArray(stats.department_statistics) &&
               stats.department_statistics.length > 0 ? (
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                  gap: "12px",
-                }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(200px, 1fr))",
+                    gap: "12px",
+                  }}
+                >
                   {stats.department_statistics.map((item) => (
                     <div
                       key={item.department_id}
@@ -365,13 +422,15 @@ export default function AdminDashboard() {
                     >
                       <strong>{item.department_name}</strong>
 
-                      <p style={{
-                        margin: "10px 0 0",
-                        color: "#64748b",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "7px",
-                      }}>
+                      <p
+                        style={{
+                          margin: "10px 0 0",
+                          color: "#64748b",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "7px",
+                        }}
+                      >
                         <Users size={16} />
                         {item.assigned_count ?? 0} assigned grievances
                       </p>
@@ -385,16 +444,153 @@ export default function AdminDashboard() {
               )}
             </div>
 
+            {/* Manage Officers */}
+            <div className="card" style={{ marginBottom: "25px" }}>
+              <h2
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  marginTop: 0,
+                }}
+              >
+                <Users size={22} />
+                Manage Officers
+              </h2>
+
+              <p style={{ color: "#64748b" }}>
+                Register officers and assign them to their respective
+                departments.
+              </p>
+
+              <form onSubmit={createOfficer}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: "15px",
+                  }}
+                >
+                  <div className="form-group">
+                    <label>Officer Name *</label>
+                    <input
+                      type="text"
+                      value={officerForm.name}
+                      onChange={(e) =>
+                        setOfficerForm({
+                          ...officerForm,
+                          name: e.target.value,
+                        })
+                      }
+                      placeholder="Enter officer name"
+                      required
+                      minLength={2}
+                      maxLength={150}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Email *</label>
+                    <input
+                      type="email"
+                      value={officerForm.email}
+                      onChange={(e) =>
+                        setOfficerForm({
+                          ...officerForm,
+                          email: e.target.value,
+                        })
+                      }
+                      placeholder="Enter email address"
+                      required
+                      maxLength={150}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Mobile Number</label>
+                    <input
+                      type="tel"
+                      value={officerForm.mobile}
+                      onChange={(e) =>
+                        setOfficerForm({
+                          ...officerForm,
+                          mobile: e.target.value,
+                        })
+                      }
+                      placeholder="Enter mobile number"
+                      maxLength={15}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Password *</label>
+                    <input
+                      type="password"
+                      value={officerForm.password}
+                      onChange={(e) =>
+                        setOfficerForm({
+                          ...officerForm,
+                          password: e.target.value,
+                        })
+                      }
+                      placeholder="Minimum 8 characters"
+                      minLength={8}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Department *</label>
+                    <select
+                      value={officerForm.department_id}
+                      onChange={(e) =>
+                        setOfficerForm({
+                          ...officerForm,
+                          department_id: e.target.value,
+                        })
+                      }
+                      required
+                    >
+                      <option value="">Select department</option>
+
+                      {departments.map((department) => (
+                        <option
+                          key={department.id}
+                          value={department.id}
+                        >
+                          {department.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={creatingOfficer}
+                  style={{ marginTop: "15px" }}
+                >
+                  {creatingOfficer
+                    ? "Creating Account..."
+                    : "Register Officer"}
+                </button>
+              </form>
+            </div>
+
             {/* All Grievances */}
             <div className="card">
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: "12px",
-                marginBottom: "20px",
-              }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "12px",
+                  marginBottom: "20px",
+                }}
+              >
                 <h2 style={{ margin: 0 }}>
                   All Grievances
                 </h2>
@@ -419,16 +615,20 @@ export default function AdminDashboard() {
                 </p>
               ) : (
                 <div style={{ overflowX: "auto" }}>
-                  <table style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    minWidth: "950px",
-                  }}>
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      minWidth: "950px",
+                    }}
+                  >
                     <thead>
-                      <tr style={{
-                        background: "#f8fafc",
-                        textAlign: "left",
-                      }}>
+                      <tr
+                        style={{
+                          background: "#f8fafc",
+                          textAlign: "left",
+                        }}
+                      >
                         {[
                           "Reference",
                           "Citizen",
@@ -456,10 +656,12 @@ export default function AdminDashboard() {
                     <tbody>
                       {grievances.map((g) => (
                         <tr key={g.id}>
-                          <td style={{
-                            padding: "13px",
-                            fontSize: "13px",
-                          }}>
+                          <td
+                            style={{
+                              padding: "13px",
+                              fontSize: "13px",
+                            }}
+                          >
                             {g.reference_number}
                           </td>
 
@@ -476,10 +678,13 @@ export default function AdminDashboard() {
                           </td>
 
                           <td style={{ padding: "13px" }}>
-                            <span style={{
-                              color: statusColors[g.status] || "#64748b",
-                              fontWeight: 600,
-                            }}>
+                            <span
+                              style={{
+                                color:
+                                  statusColors[g.status] || "#64748b",
+                                fontWeight: 600,
+                              }}
+                            >
                               {g.status}
                             </span>
                           </td>
@@ -513,22 +718,27 @@ export default function AdminDashboard() {
 
         {/* Assignment Modal */}
         {selectedGrievance && (
-          <div style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.55)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: "20px",
-            zIndex: 1000,
-          }}>
-            <div className="card" style={{
-              width: "100%",
-              maxWidth: "500px",
-              maxHeight: "90vh",
-              overflowY: "auto",
-            }}>
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.55)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: "20px",
+              zIndex: 1000,
+            }}
+          >
+            <div
+              className="card"
+              style={{
+                width: "100%",
+                maxWidth: "500px",
+                maxHeight: "90vh",
+                overflowY: "auto",
+              }}
+            >
               <h2 style={{ marginTop: 0 }}>
                 Assign Grievance
               </h2>
@@ -551,9 +761,7 @@ export default function AdminDashboard() {
                     onChange={(e) => fetchOfficers(e.target.value)}
                     required
                   >
-                    <option value="">
-                      Select department
-                    </option>
+                    <option value="">Select department</option>
 
                     {departments.map((department) => (
                       <option
@@ -575,9 +783,7 @@ export default function AdminDashboard() {
                     required
                     disabled={!departmentId}
                   >
-                    <option value="">
-                      Select officer
-                    </option>
+                    <option value="">Select officer</option>
 
                     {officers.map((officer) => (
                       <option
@@ -591,20 +797,24 @@ export default function AdminDashboard() {
                 </div>
 
                 {departmentId && officers.length === 0 && (
-                  <p style={{
-                    color: "#d97706",
-                    fontSize: "13px",
-                  }}>
+                  <p
+                    style={{
+                      color: "#d97706",
+                      fontSize: "13px",
+                    }}
+                  >
                     No officers are available in this department.
                   </p>
                 )}
 
-                <div style={{
-                  display: "flex",
-                  gap: "10px",
-                  marginTop: "20px",
-                  flexWrap: "wrap",
-                }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    marginTop: "20px",
+                    flexWrap: "wrap",
+                  }}
+                >
                   <button
                     type="submit"
                     className="primary-btn"
@@ -627,15 +837,17 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        <p style={{
-          textAlign: "center",
-          color: "#94a3b8",
-          fontSize: "12px",
-          marginTop: "25px",
-        }}>
-          Demonstration prototype. Not an official Government of Kerala website.
+        <p
+          style={{
+            textAlign: "center",
+            color: "#94a3b8",
+            fontSize: "12px",
+            marginTop: "25px",
+          }}
+        >
+          Demonstration prototype. Not an official Government of Kerala
+          website.
         </p>
-
       </div>
     </div>
   );
