@@ -1,7 +1,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 
 from app.database import get_db
 from app.models.user import User
@@ -11,6 +10,7 @@ from app.utils.security import (
     verify_password,
     create_access_token
 )
+from app.utils.id_generator import generate_next_id
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -29,10 +29,8 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
         )
 
     try:
-        next_user_id = (db.query(func.max(User.id)).scalar() or 0) + 1
-
         user = User(
-            id=next_user_id,
+            id=generate_next_id(db, User),
             name=data.name,
             email=data.email,
             mobile=data.mobile,
