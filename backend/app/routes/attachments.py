@@ -10,8 +10,9 @@ from app.database import get_db
 from app.models.user import User
 from app.models.grievance import Grievance
 from app.models.attachment import Attachment
+from app.models.department_assignment import DepartmentAssignment
 from app.utils.dependencies import get_current_user
-
+from app.utils.id_generator import generate_next_id
 
 router = APIRouter(
     prefix="/api/attachments",
@@ -89,6 +90,7 @@ async def upload_attachment(
             output.write(content)
 
         attachment = Attachment(
+            id=generate_next_id(db, Attachment),
             grievance_id=grievance.id,
             file_name=os.path.basename(file.filename or "attachment"),
             file_path=str(file_path).replace("\\", "/")
@@ -115,7 +117,10 @@ async def upload_attachment(
             "id": attachment.id,
             "grievance_id": attachment.grievance_id,
             "file_name": attachment.file_name,
-            "uploaded_at": attachment.uploaded_at.isoformat()
+            "uploaded_at": (
+                attachment.uploaded_at.isoformat()
+                if attachment.uploaded_at else None
+            )
         }
     }
 
@@ -138,15 +143,14 @@ def get_attachments(
             detail="Grievance not found"
         )
 
-    # Citizens can view only their own attachments.
-    # Staff can view attachments of grievances assigned to them.
     if current_user.role == "citizen":
         if grievance.citizen_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied"
+            )
 
     elif current_user.role == "officer":
-        from app.models.department_assignment import DepartmentAssignment
-
         assignment = (
             db.query(DepartmentAssignment)
             .filter(
@@ -157,10 +161,16 @@ def get_attachments(
         )
 
         if not assignment:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied"
+            )
 
     elif current_user.role != "cmo_admin":
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied"
+        )
 
     attachments = (
         db.query(Attachment)

@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models.contact_enquiry import ContactEnquiry
 from app.models.contact_email_otp import ContactEmailOTP
 from app.utils.dependencies import get_current_admin
+from app.utils.id_generator import generate_next_id
 
 router = APIRouter(prefix="/api/contact", tags=["Contact Enquiries"])
 
@@ -37,7 +38,6 @@ def hash_otp(otp):
     return hashlib.sha256(otp.encode()).hexdigest()
 
 
-# Send demo OTP
 @router.post("/send-otp")
 def send_otp(data: ContactEnquiryCreate, db: Session = Depends(get_db)):
     email = str(data.email).lower()
@@ -49,6 +49,7 @@ def send_otp(data: ContactEnquiryCreate, db: Session = Depends(get_db)):
     otp = f"{secrets.randbelow(1000000):06d}"
 
     record = ContactEmailOTP(
+        id=generate_next_id(db, ContactEmailOTP),
         email=email,
         otp_hash=hash_otp(otp),
         name=data.name,
@@ -57,8 +58,15 @@ def send_otp(data: ContactEnquiryCreate, db: Session = Depends(get_db)):
         expires_at=datetime.utcnow() + timedelta(minutes=5)
     )
 
-    db.add(record)
-    db.commit()
+    try:
+        db.add(record)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to generate OTP."
+        )
 
     # DEMO MODE ONLY: OTP is returned to the frontend.
     return {
@@ -68,7 +76,6 @@ def send_otp(data: ContactEnquiryCreate, db: Session = Depends(get_db)):
     }
 
 
-# Verify OTP and save enquiry
 @router.post("/verify-otp")
 def verify_otp(data: OTPVerify, db: Session = Depends(get_db)):
     email = str(data.email).lower()
@@ -81,17 +88,27 @@ def verify_otp(data: OTPVerify, db: Session = Depends(get_db)):
     )
 
     if not record:
-        raise HTTPException(status_code=404, detail="Request a new OTP.")
+        raise HTTPException(
+            status_code=404,
+            detail="Request a new OTP."
+        )
 
     if datetime.utcnow() > record.expires_at:
         db.delete(record)
         db.commit()
-        raise HTTPException(status_code=400, detail="OTP expired. Request a new one.")
+        raise HTTPException(
+            status_code=400,
+            detail="OTP expired. Request a new one."
+        )
 
     if not secrets.compare_digest(record.otp_hash, hash_otp(data.otp)):
-        raise HTTPException(status_code=400, detail="Incorrect OTP.")
+        raise HTTPException(
+            status_code=400,
+            detail="Incorrect OTP."
+        )
 
     enquiry = ContactEnquiry(
+        id=generate_next_id(db, ContactEnquiry),
         name=record.name,
         email=record.email,
         subject=record.subject,
@@ -100,10 +117,17 @@ def verify_otp(data: OTPVerify, db: Session = Depends(get_db)):
         email_verified=True
     )
 
-    db.add(enquiry)
-    db.delete(record)
-    db.commit()
-    db.refresh(enquiry)
+    try:
+        db.add(enquiry)
+        db.delete(record)
+        db.commit()
+        db.refresh(enquiry)
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to submit enquiry."
+        )
 
     return {
         "message": "Enquiry submitted successfully.",
@@ -112,7 +136,6 @@ def verify_otp(data: OTPVerify, db: Session = Depends(get_db)):
     }
 
 
-# Admin views enquiries
 @router.get("/admin")
 def get_all_enquiries(
     db: Session = Depends(get_db),
@@ -144,7 +167,6 @@ def get_all_enquiries(
     }
 
 
-# Admin updates enquiry and saves response
 @router.patch("/admin/{enquiry_id}")
 def update_enquiry(
     enquiry_id: int,
@@ -157,7 +179,10 @@ def update_enquiry(
     ).first()
 
     if not enquiry:
-        raise HTTPException(status_code=404, detail="Enquiry not found.")
+        raise HTTPException(
+            status_code=404,
+            detail="Enquiry not found."
+        )
 
     response_text = (
         data.admin_response.strip()
@@ -177,8 +202,15 @@ def update_enquiry(
         datetime.utcnow() if data.status == "Responded" else None
     )
 
-    db.commit()
-    db.refresh(enquiry)
+    try:
+        db.commit()
+        db.refresh(enquiry)
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to update enquiry."
+        )
 
     return {
         "message": "Enquiry response saved successfully.",

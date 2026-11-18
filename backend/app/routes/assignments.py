@@ -9,6 +9,7 @@ from app.models.grievance import Grievance
 from app.models.department import Department
 from app.models.department_assignment import DepartmentAssignment
 from app.utils.dependencies import get_current_admin
+from app.utils.id_generator import generate_next_id
 
 router = APIRouter(
     prefix="/api/assignments",
@@ -28,40 +29,27 @@ def assign_grievance(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    # Check whether grievance exists
     grievance = db.query(Grievance).filter(
         Grievance.id == data.grievance_id
     ).first()
 
     if not grievance:
-        raise HTTPException(
-            status_code=404,
-            detail="Grievance not found"
-        )
+        raise HTTPException(status_code=404, detail="Grievance not found")
 
-    # Check whether department exists
     department = db.query(Department).filter(
         Department.id == data.department_id
     ).first()
 
     if not department:
-        raise HTTPException(
-            status_code=404,
-            detail="Department not found"
-        )
+        raise HTTPException(status_code=404, detail="Department not found")
 
-    # Check whether officer exists
     officer = db.query(User).filter(
         User.id == data.officer_id
     ).first()
 
     if not officer:
-        raise HTTPException(
-            status_code=404,
-            detail="Officer not found"
-        )
+        raise HTTPException(status_code=404, detail="Officer not found")
 
-    # Validate officer role and department
     if officer.role != "officer":
         raise HTTPException(
             status_code=400,
@@ -74,8 +62,8 @@ def assign_grievance(
             detail="Officer does not belong to the selected department"
         )
 
-    # Create assignment
     assignment = DepartmentAssignment(
+        id=generate_next_id(db, DepartmentAssignment),
         grievance_id=grievance.id,
         department_id=department.id,
         officer_id=officer.id,

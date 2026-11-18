@@ -11,7 +11,7 @@ from app.models.department import Department
 from app.models.department_assignment import DepartmentAssignment
 from app.models.grievance_history import GrievanceHistory
 from app.utils.dependencies import get_current_officer
-
+from app.utils.id_generator import generate_next_id
 
 router = APIRouter(
     prefix="/api/officer",
@@ -24,12 +24,11 @@ class StatusUpdate(BaseModel):
         "Under Review",
         "In Progress",
         "Resolved",
-        "Rejopened"
+        "Reopened"
     ]
     remarks: str = Field(min_length=3, max_length=1000)
 
 
-# GET: View grievances assigned to the logged-in officer
 @router.get("/grievances")
 def get_assigned_grievances(
     db: Session = Depends(get_db),
@@ -45,9 +44,7 @@ def get_assigned_grievances(
             Department,
             DepartmentAssignment.department_id == Department.id
         )
-        .filter(
-            DepartmentAssignment.officer_id == officer.id
-        )
+        .filter(DepartmentAssignment.officer_id == officer.id)
         .order_by(
             DepartmentAssignment.assigned_at.desc(),
             DepartmentAssignment.id.desc()
@@ -58,7 +55,6 @@ def get_assigned_grievances(
     result = []
 
     for assignment, grievance, department in assignments:
-        # Only show the latest assignment for this grievance
         latest_assignment = (
             db.query(DepartmentAssignment)
             .filter(
@@ -75,10 +71,8 @@ def get_assigned_grievances(
             continue
 
         result.append({
-            # Both fields are provided for frontend compatibility
             "id": grievance.id,
             "grievance_id": grievance.id,
-
             "assignment_id": assignment.id,
             "reference_number": grievance.reference_number,
             "subject": grievance.subject,
@@ -100,7 +94,6 @@ def get_assigned_grievances(
     }
 
 
-# PATCH: Update grievance status
 @router.patch("/grievances/{grievance_id}/status")
 def update_grievance_status(
     grievance_id: int,
@@ -120,7 +113,6 @@ def update_grievance_status(
             detail="Grievance not found"
         )
 
-    # Find the latest assignment
     assignment = (
         db.query(DepartmentAssignment)
         .filter(
@@ -133,7 +125,6 @@ def update_grievance_status(
         .first()
     )
 
-    # Only the currently assigned officer can update
     if not assignment or assignment.officer_id != officer.id:
         raise HTTPException(
             status_code=403,
@@ -143,6 +134,7 @@ def update_grievance_status(
     old_status = grievance.status
 
     history = GrievanceHistory(
+        id=generate_next_id(db, GrievanceHistory),
         grievance_id=grievance.id,
         changed_by=officer.id,
         old_status=old_status,

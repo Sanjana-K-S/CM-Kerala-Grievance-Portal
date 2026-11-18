@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.feedback import CitizenFeedback
 from app.models.grievance import Grievance
 from app.utils.dependencies import get_current_user
+from app.utils.id_generator import generate_next_id
 
 router = APIRouter(
     prefix="/api/feedback",
@@ -63,15 +64,24 @@ def submit_feedback(
         )
 
     feedback = CitizenFeedback(
+        id=generate_next_id(db, CitizenFeedback),
         grievance_id=grievance_id,
         citizen_id=current_user.id,
         rating=data.rating,
         comments=data.comments
     )
 
-    db.add(feedback)
-    db.commit()
-    db.refresh(feedback)
+    try:
+        db.add(feedback)
+        db.commit()
+        db.refresh(feedback)
+
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to submit feedback."
+        )
 
     return {
         "message": "Feedback submitted successfully.",
@@ -80,7 +90,10 @@ def submit_feedback(
             "grievance_id": feedback.grievance_id,
             "rating": feedback.rating,
             "comments": feedback.comments,
-            "created_at": feedback.created_at.isoformat()
+            "created_at": (
+                feedback.created_at.isoformat()
+                if feedback.created_at else None
+            )
         }
     }
 
@@ -102,7 +115,10 @@ def get_my_feedback(
                 "grievance_id": item.grievance_id,
                 "rating": item.rating,
                 "comments": item.comments,
-                "created_at": item.created_at.isoformat()
+                "created_at": (
+                    item.created_at.isoformat()
+                    if item.created_at else None
+                )
             }
             for item in feedback_list
         ]

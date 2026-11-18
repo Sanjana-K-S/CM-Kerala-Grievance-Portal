@@ -4,7 +4,6 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
@@ -15,6 +14,7 @@ from app.models.department_assignment import DepartmentAssignment
 from app.models.grievance_history import GrievanceHistory
 from app.schemas.grievance import GrievanceCreate
 from app.utils.dependencies import get_current_user
+from app.utils.id_generator import generate_next_id
 
 router = APIRouter(
     prefix="/api/grievances",
@@ -42,13 +42,6 @@ def generate_reference_number(db: Session):
     )
 
 
-def generate_grievance_id(db: Session):
-    return (
-        db.query(func.max(Grievance.id)).scalar() or 0
-    ) + 1
-
-
-# 1. Submit a grievance
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def submit_grievance(
     data: GrievanceCreate,
@@ -61,11 +54,9 @@ def submit_grievance(
             detail="Only citizens can submit grievances"
         )
 
-    reference_number = generate_reference_number(db)
-
     grievance = Grievance(
-        id=generate_grievance_id(db),
-        reference_number=reference_number,
+        id=generate_next_id(db, Grievance),
+        reference_number=generate_reference_number(db),
         citizen_id=current_user.id,
         district=data.district,
         category=data.category,
@@ -75,8 +66,18 @@ def submit_grievance(
         status="Submitted"
     )
 
+    history = GrievanceHistory(
+        id=generate_next_id(db, GrievanceHistory),
+        grievance_id=grievance.id,
+        changed_by=current_user.id,
+        old_status=None,
+        new_status="Submitted",
+        remarks="Grievance submitted by citizen"
+    )
+
     try:
         db.add(grievance)
+        db.add(history)
         db.commit()
         db.refresh(grievance)
 
@@ -106,7 +107,6 @@ def submit_grievance(
     }
 
 
-# 2. Get all grievances belonging to the logged-in citizen
 @router.get("/my")
 def get_my_grievances(
     db: Session = Depends(get_db),
@@ -145,7 +145,6 @@ def get_my_grievances(
     }
 
 
-# 3. Track a grievance using its reference number
 @router.get("/track/{reference_number}")
 def track_grievance(
     reference_number: str,
@@ -203,9 +202,7 @@ def track_grievance(
         .all()
     )
 
-    assigned_department = (
-        assignment[1].name if assignment else None
-    )
+    assigned_department = assignment[1].name if assignment else None
 
     assigned_officer = (
         assignment[2].name
