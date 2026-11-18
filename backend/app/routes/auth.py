@@ -1,6 +1,8 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
+
 from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import RegisterRequest, LoginRequest
@@ -26,24 +28,35 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
             detail="Email already registered"
         )
 
-    user = User(
-        name=data.name,
-        email=data.email,
-        mobile=data.mobile,
-        password_hash=hash_password(data.password),
-        role="citizen"
-    )
+    try:
+        next_user_id = (db.query(func.max(User.id)).scalar() or 0) + 1
 
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+        user = User(
+            id=next_user_id,
+            name=data.name,
+            email=data.email,
+            mobile=data.mobile,
+            password_hash=hash_password(data.password),
+            role="citizen"
+        )
 
-    return {
-        "message": "Registration successful",
-        "user_id": user.id,
-        "name": user.name,
-        "email": user.email
-    }
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        return {
+            "message": "Registration successful",
+            "user_id": user.id,
+            "name": user.name,
+            "email": user.email
+        }
+
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Registration failed. Please try again."
+        )
 
 
 @router.post("/login")
