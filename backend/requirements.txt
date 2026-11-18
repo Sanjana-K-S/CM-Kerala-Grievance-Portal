@@ -7,3 +7,7 @@ python-multipart
 pydantic-settings
 email-validator
 pydantic[email]
+passlib[bcrypt]
+bcrypt==4.0.1
+python-jose[cryptography]
+google-genai
