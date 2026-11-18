@@ -19,3 +19,5 @@ dist/
 
 # Uploaded grievance files
 backend/uploads/
+
+backend/database_export*.sql
