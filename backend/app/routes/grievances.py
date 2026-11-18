@@ -4,6 +4,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
@@ -41,6 +42,12 @@ def generate_reference_number(db: Session):
     )
 
 
+def generate_grievance_id(db: Session):
+    return (
+        db.query(func.max(Grievance.id)).scalar() or 0
+    ) + 1
+
+
 # 1. Submit a grievance
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def submit_grievance(
@@ -57,6 +64,7 @@ def submit_grievance(
     reference_number = generate_reference_number(db)
 
     grievance = Grievance(
+        id=generate_grievance_id(db),
         reference_number=reference_number,
         citizen_id=current_user.id,
         district=data.district,
@@ -159,7 +167,6 @@ def track_grievance(
             detail="Grievance not found"
         )
 
-    # Get the latest department assignment and assigned officer
     assignment = (
         db.query(DepartmentAssignment, Department, User)
         .join(
@@ -180,7 +187,6 @@ def track_grievance(
         .first()
     )
 
-    # Get status history in chronological order
     history_records = (
         db.query(GrievanceHistory, User)
         .join(
@@ -218,11 +224,9 @@ def track_grievance(
             "description": grievance.description,
             "priority": grievance.priority,
             "status": grievance.status,
-
             "department": assigned_department,
             "assigned_department": assigned_department,
             "assigned_officer": assigned_officer,
-
             "created_at": (
                 grievance.created_at.isoformat()
                 if grievance.created_at else None
@@ -231,7 +235,6 @@ def track_grievance(
                 grievance.updated_at.isoformat()
                 if grievance.updated_at else None
             ),
-
             "history": [
                 {
                     "id": record.id,
