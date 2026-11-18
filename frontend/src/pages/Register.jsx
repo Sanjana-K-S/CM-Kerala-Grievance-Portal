@@ -4,7 +4,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { UserPlus, ShieldCheck } from "lucide-react";
 import api from "../services/api";
 
-
 export default function Register() {
   const navigate = useNavigate();
 
@@ -31,6 +30,16 @@ export default function Register() {
     setError("");
     setSuccess("");
 
+    if (form.name.trim().length < 2) {
+      setError("Please enter your full name.");
+      return;
+    }
+
+    if (form.mobile.trim().length < 10 || form.mobile.trim().length > 15) {
+      setError("Mobile number must contain 10 to 15 characters.");
+      return;
+    }
+
     if (form.password.length < 8) {
       setError("Password must contain at least 8 characters.");
       return;
@@ -39,7 +48,12 @@ export default function Register() {
     setLoading(true);
 
     try {
-      await api.post("/auth/register", form);
+      await api.post("/auth/register", {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        mobile: form.mobile.trim(),
+        password: form.password,
+      });
 
       setSuccess("Registration successful! Redirecting to login...");
 
@@ -47,9 +61,24 @@ export default function Register() {
         navigate("/login");
       }, 1200);
     } catch (err) {
-      setError(
-        err.response?.data?.detail || "Registration failed. Please try again."
-      );
+      const detail = err.response?.data?.detail;
+
+      if (Array.isArray(detail)) {
+        setError(
+          detail
+            .map((item) => {
+              const field = item.loc?.slice(1).join(".") || "Field";
+              return `${field}: ${item.msg}`;
+            })
+            .join(" | ")
+        );
+      } else if (typeof detail === "string") {
+        setError(detail);
+      } else {
+        setError(
+          "Registration failed. Please check your details and try again."
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -61,6 +90,7 @@ export default function Register() {
         <div style={styles.logo}>
           <ShieldCheck size={30} />
         </div>
+
         <h2>CM Kerala Grievance Portal</h2>
         <p>Create your citizen account</p>
       </div>
@@ -74,8 +104,17 @@ export default function Register() {
           Enter your details to get started
         </p>
 
-        {error && <div className="error-message">{error}</div>}
-        {success && <div className="success-message">{success}</div>}
+        {error && (
+          <div className="error-message" role="alert">
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="success-message" role="status">
+            {success}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -86,6 +125,8 @@ export default function Register() {
               placeholder="Enter your full name"
               value={form.name}
               onChange={handleChange}
+              minLength={2}
+              maxLength={150}
               required
             />
           </div>
@@ -110,6 +151,8 @@ export default function Register() {
               placeholder="Enter mobile number"
               value={form.mobile}
               onChange={handleChange}
+              minLength={10}
+              maxLength={15}
               required
             />
           </div>
@@ -123,6 +166,7 @@ export default function Register() {
               value={form.password}
               onChange={handleChange}
               minLength={8}
+              maxLength={72}
               required
             />
           </div>
@@ -140,11 +184,15 @@ export default function Register() {
         <p style={styles.footer}>
           Already registered? <Link to="/login">Sign in</Link>
         </p>
+
         <p style={{ marginTop: "15px", textAlign: "center" }}>
-  <Link to="/contact" style={{ color: "#14532d", fontWeight: 600 }}>
-    Contact Us
-  </Link>
-</p>
+          <Link
+            to="/contact"
+            style={{ color: "#14532d", fontWeight: 600 }}
+          >
+            Contact Us
+          </Link>
+        </p>
       </div>
     </div>
   );
